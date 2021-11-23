@@ -21,7 +21,7 @@ package org.ossreviewtoolkit.analyzer.managers
 
 import io.kotest.core.spec.style.WordSpec
 import io.kotest.matchers.collections.containExactly
-import io.kotest.matchers.collections.haveSize
+import io.kotest.matchers.maps.haveSize
 import io.kotest.matchers.should
 import io.kotest.matchers.shouldBe
 
@@ -42,42 +42,63 @@ import org.ossreviewtoolkit.utils.test.patchExpectedResult
 
 class SpdxDocumentFileFunTest : WordSpec({
     "resolveDependencies()" should {
-        "succeed if a project is provided" {
+        "succeed if a project with inline packages is provided" {
             val expectedResult = patchExpectedResult(
-                projectDir.parentFile.resolve("spdx-project-expected-output.yml"),
+                projectDir.parentFile.resolve("spdx-project-xyz-expected-output.yml"),
                 url = vcsUrl,
                 urlProcessed = normalizeVcsUrl(vcsUrl),
                 revision = vcsRevision
             )
 
-            val definitionFile = projectDir.resolve("project/project.spdx.yml")
+            val definitionFile = projectDir.resolve("project-xyz-with-inline-packages.spdx.yml")
+            val actualResult = createSpdxDocumentFile().resolveSingleProject(definitionFile).toYaml()
+
+            actualResult shouldBe expectedResult
+        }
+
+        "succeed if a project with package references is provided" {
+            val expectedResult = patchExpectedResult(
+                projectDir.parentFile.resolve("spdx-project-xyz-expected-output.yml"),
+                url = vcsUrl,
+                urlProcessed = normalizeVcsUrl(vcsUrl),
+                revision = vcsRevision
+            )
+
+            val definitionFile = projectDir.resolve("project-xyz-with-package-references.spdx.yml")
             val actualResult = createSpdxDocumentFile().resolveSingleProject(definitionFile).toYaml()
 
             actualResult shouldBe expectedResult
         }
 
         "succeed if no project is provided" {
-            val packageFileCurl = projectDir.resolve("package/libs/curl/package.spdx.yml")
-            val packageFileZlib = projectDir.resolve("package/libs/zlib/package.spdx.yml")
+            val curlPackageFile = projectDir.resolve("libs/curl/package.spdx.yml")
+            val curlId = Identifier("SpdxDocumentFile::curl:7.70.0")
 
-            val definitionFiles = listOf(packageFileCurl, packageFileZlib)
+            val opensslPackageFile = projectDir.resolve("libs/openssl/package.spdx.yml")
+            val opensslId = Identifier("SpdxDocumentFile:OpenSSL Development Team:openssl:1.1.1g")
+
+            val zlibPackageFile = projectDir.resolve("libs/zlib/package.spdx.yml")
+            val zlibId = Identifier("SpdxDocumentFile::zlib:1.2.11")
+
+            val definitionFiles = listOf(curlPackageFile, opensslPackageFile, zlibPackageFile)
             val actualResult = createSpdxDocumentFile().resolveDependencies(definitionFiles, emptyMap())
                 // Extract only ProjectAnalyzerResults to avoid depending on other analyzer result specific items (e.g.
                 // the dependency graph).
-                .projectResults.values.flatten().sortedBy { it.project.id }
+                .projectResults.values.flatten().associateBy { it.project.id }
 
-            actualResult should haveSize(2)
-            actualResult.first() shouldBe ProjectAnalyzerResult(
+            actualResult should haveSize(3)
+
+            actualResult[curlId] shouldBe ProjectAnalyzerResult(
                 Project(
-                    id = Identifier("SpdxDocumentFile::curl:7.70.0"),
-                    definitionFilePath = packageFileCurl.relativeTo(vcsDir.getRootPath()).invariantSeparatorsPath,
+                    id = curlId,
+                    definitionFilePath = curlPackageFile.relativeTo(vcsDir.getRootPath()).invariantSeparatorsPath,
                     authors = sortedSetOf("Daniel Stenberg (daniel@haxx.se)"),
                     declaredLicenses = sortedSetOf("curl"),
                     vcs = VcsInfo(
                         type = VcsType.GIT,
                         url = normalizeVcsUrl(vcsUrl),
                         revision = vcsRevision,
-                        path = vcsDir.getPathToRoot(packageFileCurl.parentFile)
+                        path = vcsDir.getPathToRoot(curlPackageFile.parentFile)
                     ),
                     homepageUrl = "https://curl.haxx.se/",
                     scopeDependencies = sortedSetOf(
@@ -86,17 +107,38 @@ class SpdxDocumentFileFunTest : WordSpec({
                 ),
                 sortedSetOf()
             )
-            actualResult.last() shouldBe ProjectAnalyzerResult(
+
+            actualResult[opensslId] shouldBe ProjectAnalyzerResult(
                 Project(
-                    id = Identifier("SpdxDocumentFile::zlib:1.2.11"),
-                    definitionFilePath = packageFileZlib.relativeTo(vcsDir.getRootPath()).invariantSeparatorsPath,
+                    id = opensslId,
+                    definitionFilePath = opensslPackageFile.relativeTo(vcsDir.getRootPath()).invariantSeparatorsPath,
+                    authors = sortedSetOf("OpenSSL Development Team"),
+                    declaredLicenses = sortedSetOf("Apache-2.0"),
+                    vcs = VcsInfo(
+                        type = VcsType.GIT,
+                        url = normalizeVcsUrl(vcsUrl),
+                        revision = vcsRevision,
+                        path = vcsDir.getPathToRoot(opensslPackageFile.parentFile)
+                    ),
+                    homepageUrl = "https://www.openssl.org/",
+                    scopeDependencies = sortedSetOf(
+                        Scope("default")
+                    )
+                ),
+                sortedSetOf()
+            )
+
+            actualResult[zlibId] shouldBe ProjectAnalyzerResult(
+                Project(
+                    id = zlibId,
+                    definitionFilePath = zlibPackageFile.relativeTo(vcsDir.getRootPath()).invariantSeparatorsPath,
                     authors = sortedSetOf("Jean-loup Gailly", "Mark Adler"),
                     declaredLicenses = sortedSetOf("Zlib"),
                     vcs = VcsInfo(
                         type = VcsType.GIT,
                         url = normalizeVcsUrl(vcsUrl),
                         revision = vcsRevision,
-                        path = vcsDir.getPathToRoot(packageFileZlib.parentFile)
+                        path = vcsDir.getPathToRoot(zlibPackageFile.parentFile)
                     ),
                     homepageUrl = "http://zlib.net",
                     scopeDependencies = sortedSetOf(
@@ -110,8 +152,8 @@ class SpdxDocumentFileFunTest : WordSpec({
 
     "mapDefinitionFiles()" should {
         "remove SPDX documents that do not describe a project if a project file is provided" {
-            val projectFile = projectDir.resolve("project/project.spdx.yml")
-            val packageFile = projectDir.resolve("package/libs/curl/package.spdx.yml")
+            val projectFile = projectDir.resolve("project-xyz-with-package-references.spdx.yml")
+            val packageFile = projectDir.resolve("libs/curl/package.spdx.yml")
 
             val definitionFiles = listOf(projectFile, packageFile)
 
@@ -121,8 +163,8 @@ class SpdxDocumentFileFunTest : WordSpec({
         }
 
         "keep SPDX documents that do not describe a project if no project file is provided" {
-            val packageFileCurl = projectDir.resolve("package/libs/curl/package.spdx.yml")
-            val packageFileZlib = projectDir.resolve("package/libs/zlib/package.spdx.yml")
+            val packageFileCurl = projectDir.resolve("libs/curl/package.spdx.yml")
+            val packageFileZlib = projectDir.resolve("libs/zlib/package.spdx.yml")
 
             val definitionFiles = listOf(packageFileCurl, packageFileZlib)
 

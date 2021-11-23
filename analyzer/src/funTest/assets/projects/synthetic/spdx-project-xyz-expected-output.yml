@@ -1,7 +1,7 @@
 ---
 project:
   id: "SpdxDocumentFile::xyz:0.1.0"
-  definition_file_path: "analyzer/src/funTest/assets/projects/synthetic/spdx/project/project.spdx.yml"
+  definition_file_path: "analyzer/src/funTest/assets/projects/synthetic/spdx/project.spdx.yml"
   authors:
   - "Thomas Steenbergen"
   declared_licenses:
@@ -12,12 +12,12 @@ project:
     type: "Git"
     url: "<REPLACE_URL_PROCESSED>"
     revision: "<REPLACE_REVISION>"
-    path: "analyzer/src/funTest/assets/projects/synthetic/spdx/project"
+    path: "analyzer/src/funTest/assets/projects/synthetic/spdx"
   vcs_processed:
     type: "Git"
     url: "<REPLACE_URL_PROCESSED>"
     revision: "<REPLACE_REVISION>"
-    path: "analyzer/src/funTest/assets/projects/synthetic/spdx/project"
+    path: "analyzer/src/funTest/assets/projects/synthetic/spdx"
   homepage_url: "https://example.com/products/xyz"
   scopes:
   - name: "default"
@@ -120,9 +120,9 @@ packages:
     type: "Git"
     url: "<REPLACE_URL>"
     revision: "<REPLACE_REVISION>"
-    path: "analyzer/src/funTest/assets/projects/synthetic/spdx/project/libs/openssl"
+    path: "analyzer/src/funTest/assets/projects/synthetic/spdx/libs/openssl"
   vcs_processed:
     type: "Git"
     url: "<REPLACE_URL_PROCESSED>"
     revision: "<REPLACE_REVISION>"
-    path: "analyzer/src/funTest/assets/projects/synthetic/spdx/project/libs/openssl"
+    path: "analyzer/src/funTest/assets/projects/synthetic/spdx/libs/openssl"
