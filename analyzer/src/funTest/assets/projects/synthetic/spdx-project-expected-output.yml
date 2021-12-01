@@ -44,7 +44,7 @@ packages:
     \ of powerful features."
   homepage_url: "https://curl.haxx.se/"
   binary_artifact:
-    url: "https://github.com/curl/curl/releases/download/curl-7_70_0/curl-7.70.0.tar.gz"
+    url: ""
     hash:
       value: ""
       algorithm: ""
@@ -81,7 +81,7 @@ packages:
       value: ""
       algorithm: ""
   source_artifact:
-    url: "http://zlib.net/zlib-1.2.11.tar.gz"
+    url: ""
     hash:
       value: ""
       algorithm: ""

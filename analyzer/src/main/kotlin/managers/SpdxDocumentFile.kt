@@ -188,33 +188,9 @@ private fun SpdxPackage.getConcludedLicense(): SpdxExpression? =
     licenseConcluded.takeIf { SpdxConstants.isPresent(it) }?.toSpdx()
 
 /**
- * Return a [RemoteArtifact] for the binary artifact that the [downloadLocation][SpdxPackage.downloadLocation] points
- * to. If the download location is a "not present" value, or if it points to a source artifact or a VCS location
- * instead, return null.
+ * Return a [RemoteArtifact] for the artifact that the [downloadLocation][SpdxPackage.downloadLocation] points to. If
+ * the download location is a "not present" value, or if it points to a VCS location instead, return null.
  */
-internal fun SpdxPackage.getBinaryArtifact(): RemoteArtifact? =
-    getRemoteArtifact().takeUnless {
-        // Note: The "FilesAnalyzed" field "Indicates whether the file content of this package has been available for or
-        // subjected to analysis when creating the SPDX document". It does not indicate whether files were actually
-        // analyzed.
-        // If files were available, do *not* consider this do be a *binary* artifact.
-        filesAnalyzed
-    }
-
-/**
- * Return a [RemoteArtifact] for the source artifact that the [downloadLocation][SpdxPackage.downloadLocation] points
- * to. If the download location is a "not present" value, or if it points to a binary artifact or a VCS location
- * instead, return null.
- */
-internal fun SpdxPackage.getSourceArtifact(): RemoteArtifact? =
-    getRemoteArtifact().takeIf {
-        // Note: The "FilesAnalyzed" field "Indicates whether the file content of this package has been available for or
-        // subjected to analysis when creating the SPDX document". It does not indicate whether files were actually
-        // analyzed.
-        // If files were available, *do* consider this do be a *source* artifact.
-        filesAnalyzed
-    }
-
 private fun SpdxPackage.getRemoteArtifact(): RemoteArtifact? =
     when {
         SpdxConstants.isNotPresent(downloadLocation) -> null
@@ -370,7 +346,7 @@ class SpdxDocumentFile(
     /**
      * Create a [Package] out of this [SpdxPackage].
      */
-    private fun SpdxPackage.toPackage(definitionFile: File): Package {
+    private fun SpdxPackage.toPackage(definitionFile: File, doc: SpdxDocument): Package {
         val packageDescription = description.takeUnless { it.isEmpty() } ?: summary
 
         // If the VCS information cannot be determined from the VCS working tree itself, fall back to try getting it
@@ -378,7 +354,19 @@ class SpdxDocumentFile(
         val packageDir = definitionFile.resolveSibling(packageFilename)
         val vcs = VersionControlSystem.forDirectory(packageDir)?.getInfo() ?: getVcsInfo().orEmpty()
 
+        val generatedFromRelations = doc.relationships.filter {
+            it.relationshipType == SpdxRelationship.Type.GENERATED_FROM
+        }
+
+        val isBinaryArtifact = generatedFromRelations.any { it.spdxElementId == spdxId }
+        val isSourceArtifact = generatedFromRelations.any { it.relatedSpdxElement == spdxId }
+
+        require(!(isBinaryArtifact && isSourceArtifact)) {
+            "The SPDX package with ID '$spdxId' cannot be a binary and a source artifact at the same time."
+        }
+
         val id = toIdentifier()
+        val artifact = getRemoteArtifact()
 
         return Package(
             id = id,
@@ -389,8 +377,8 @@ class SpdxDocumentFile(
             concludedLicense = getConcludedLicense(),
             description = packageDescription,
             homepageUrl = homepage.mapNotPresentToEmpty(),
-            binaryArtifact = getBinaryArtifact().orEmpty(),
-            sourceArtifact = getSourceArtifact().orEmpty(),
+            binaryArtifact = artifact.takeIf { isBinaryArtifact }.orEmpty(),
+            sourceArtifact = artifact.takeIf { isSourceArtifact }.orEmpty(),
             vcs = vcs
         )
     }
@@ -438,7 +426,7 @@ class SpdxDocumentFile(
         getDependencies(pkg, doc, definitionFile, packages, SpdxRelationship.Type.DEPENDENCY_OF) { target ->
             val issues = mutableListOf<OrtIssue>()
             getSpdxPackageForId(doc, target, definitionFile, issues)?.let { dependency ->
-                packages += dependency.toPackage(definitionFile)
+                packages += dependency.toPackage(definitionFile, doc)
 
                 PackageReference(
                     id = dependency.toIdentifier(),
@@ -476,7 +464,7 @@ class SpdxDocumentFile(
                     }
 
                     getSpdxPackageForId(doc, source, definitionFile, issues)?.let { dependency ->
-                        packages += dependency.toPackage(definitionFile)
+                        packages += dependency.toPackage(definitionFile, doc)
                         PackageReference(
                             id = dependency.toIdentifier(),
                             dependencies = getDependencies(
